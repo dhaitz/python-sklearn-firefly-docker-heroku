@@ -1,36 +1,34 @@
 import pandas as pd
+import re
 
-df = pd.read_csv('movies.csv')
+df = pd.read_csv("labeled_data.csv", usecols=['class', 'tweet'])
+df['tweet'] = df['tweet'].apply(lambda tweet: re.sub('[^A-Za-z]+', ' ', tweet.lower()))
 
-df['title'] = df['title'].apply(lambda x: x.split('(')[0])
-df = df[df['genres'] != '(no genres listed)']
-df['genres'] = df['genres'].apply(lambda x: x.split('|'))
-
-########################
-
-from sklearn import preprocessing
-
-mlb = preprocessing.MultiLabelBinarizer()
-targets_mlb = mlb.fit_transform(df['genres'])
+# 0 - hate speech 1 - offensive language 2 - neither
 
 ########################
 
-from sklearn import pipeline, feature_extraction, multiclass, svm
+from sklearn.pipeline import make_pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.svm import SVC
+from stop_words import get_stop_words
 
-clf = pipeline.make_pipeline(
-    feature_extraction.text.TfidfVectorizer(),
-    multiclass.OneVsRestClassifier(svm.LinearSVC())
+clf = make_pipeline(
+    TfidfVectorizer(stop_words=get_stop_words('en')),
+    OneVsRestClassifier(SVC(kernel='linear', probability=True))
 )
-clf = clf.fit(X=df['title'], y=targets_mlb)
+
+clf = clf.fit(X=df['tweet'], y=df['class'])
 
 ########################
 
-text = "Space Zombies"
-mlb.inverse_transform(clf.predict([text]))[0]
+text = "I hate you, please die!"
+clf.predict_proba([text])[0]
 
 ########################
 
 from sklearn import externals
 
-model_filename = 'movies.joblib.z'
-externals.joblib.dump((clf, mlb), model_filename)
+model_filename = "hatespeech.joblib.z"
+externals.joblib.dump((clf), model_filename)
